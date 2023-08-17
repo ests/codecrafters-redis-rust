@@ -20,9 +20,15 @@ fn main() {
 }
 
 fn handle_client<T: Write + Read>(mut stream: T) -> std::io::Result<()> {
-    let mut buf: [u8; 64] = [0; 64];
-    stream.read(&mut buf)?;
+    loop {
+        let mut buf: [u8; 64] = [0; 64];
+        let bytes_read = stream.read(&mut buf)?;
+        if bytes_read == 0 {
+            break;
+        }
 
-    stream.write(b"+PONG\r\n")?;
+        stream.write(b"+PONG\r\n")?;
+    }
+
     Ok(())
 }
