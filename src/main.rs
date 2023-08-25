@@ -30,7 +30,7 @@ fn handle_client<T: Write + Read>(mut stream: T) -> std::io::Result<()> {
             break;
         }
 
-        stream.write_all(b"+PONG\r\n")?;
+        let _ = stream.write(b"+PONG\r\n")?;
     }
 
     Ok(())
