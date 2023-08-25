@@ -1,16 +1,19 @@
-use std::{net::TcpListener, io::Write, io::Read};
+use redis_starter_rust::ThreadPool;
+use std::{io::Read, io::Write, net::TcpListener};
 
 fn main() {
-    // You can use print statements as follows for debugging, they'll be visible when running tests.
-    println!("Logs from your program will appear here!");
-
     let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
+    let pool = ThreadPool::new(2);
 
     for stream in listener.incoming() {
         match stream {
             Ok(s) => {
-                handle_client(s).unwrap();
                 println!("accepted new connection");
+
+                pool.execute(|| {
+                    println!("pool.execute");
+                    handle_client(s).unwrap();
+                })
             }
             Err(e) => {
                 println!("error: {}", e);
@@ -27,7 +30,7 @@ fn handle_client<T: Write + Read>(mut stream: T) -> std::io::Result<()> {
             break;
         }
 
-        stream.write(b"+PONG\r\n")?;
+        stream.write_all(b"+PONG\r\n")?;
     }
 
     Ok(())
