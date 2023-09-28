@@ -34,7 +34,19 @@ pub enum StrType {
     Bulk,
 }
 
-// TODO: test empty array
+// #[allow(unused)]
+// pub fn parse_simple_string_or_array(input: &str) -> IResult<&str, Type> {
+//     alt((
+//         map(parse_string, |s| Type::String(Cow::from(s), StrType::Basic)),
+//         parse_array,
+//     ))(input)
+// }
+
+#[allow(unused)]
+pub fn parse_resp(input: &str) -> IResult<&str, Vec<Type>> {
+    parse_array(input)
+}
+
 #[allow(unused)]
 pub fn parse_array(input: &str) -> IResult<&str, Vec<Type>> {
     let (rest, arr_len) = delimited(char('*'), u32, line_ending)(input)?;
@@ -118,5 +130,16 @@ mod tests {
         assert_eq!(output, vec![Integer(1), Integer(2), Integer(3)]);
     }
 
-    // TODO: add more tests
+    #[test]
+    fn test_parse_resp_echo() {
+        let (remaining_input, output) = parse_array("*2\r\n$4\r\nECHO\r\n$3\r\nhey\r\n").unwrap();
+        assert_eq!(remaining_input, "");
+        assert_eq!(
+            output,
+            vec![
+                Type::String(Cow::from("ECHO"), StrType::Bulk),
+                Type::String(Cow::from("hey"), StrType::Bulk)
+            ]
+        );
+    }
 }
