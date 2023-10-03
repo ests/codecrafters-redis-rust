@@ -1,25 +1,15 @@
 use std::borrow::Cow;
 use std::rc::Rc;
 
-//allow unused for the whole file
-use nom::branch::alt;
-use nom::bytes::complete::tag;
-use nom::bytes::complete::tag_no_case;
-use nom::bytes::complete::take;
-use nom::character::complete::alpha1;
-use nom::character::complete::digit1;
-use nom::character::complete::line_ending;
-use nom::character::complete::u32;
-use nom::character::complete::{char, one_of};
-use nom::combinator::map;
-use nom::combinator::map_res;
-use nom::combinator::opt;
-use nom::combinator::recognize;
-use nom::multi::count;
-use nom::sequence::delimited;
-use nom::sequence::terminated;
-use nom::sequence::tuple;
-use nom::IResult;
+use nom::{
+    branch::alt,
+    bytes::complete::take,
+    character::complete::{alpha1, char, digit1, line_ending, one_of, u32},
+    combinator::{map, map_res, opt, recognize},
+    multi::count,
+    sequence::{delimited, terminated, tuple},
+    IResult,
+};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Type<'a> {
