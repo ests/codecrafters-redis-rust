@@ -33,41 +33,31 @@ fn handle_client<T: Write + Read>(mut stream: T) -> std::io::Result<()> {
             break;
         }
 
-        let (_, resp_type): (&str, Vec<resp::Type>) =
+        let (_, resp_cmd): (&str, Vec<resp::Type>) =
             resp::parse_resp(std::str::from_utf8(&buf).unwrap()).unwrap();
 
-        let resp_cmd = &resp_type[..];
+        let mut reply: Option<Vec<u8>> = None;
 
-        match resp_cmd {
-            [Type::String(cmd, StrType::Bulk), Type::String(attr, StrType::Bulk)] => {
-                match cmd.to_lowercase().as_ref() {
-                    "echo" => {
-                        let mut reply = String::from("+");
-                        reply.push_str(attr.clone().as_ref());
-                        reply.push_str("\r\n");
-                        let _ = stream.write(reply.as_bytes())?;
-                    }
-                    _ => {
-                        eprintln!("Unsupported command");
-                        let _ = stream.write(b"+OK\r\n")?;
+        if let Type::String(cmd, StrType::Bulk) = &resp_cmd[0] {
+            match cmd.clone().to_owned().to_lowercase().as_ref() {
+                "echo" => {
+                    if let Type::String(attr, StrType::Bulk) = &resp_cmd[1] {
+                        reply = Some(format!("+{}\r\n", attr.clone().as_ref()).into_bytes());
                     }
                 }
-            },
-            [Type::String(cmd, StrType::Bulk)] => {
-                match cmd.to_lowercase().as_ref() {
-                    "ping" => {
-                        let _ = stream.write(b"+PONG\r\n")?;
-                    }
-                    _ => {
-                        eprintln!("Unsupported command");
-                        let _ = stream.write(b"+OK\r\n")?;
-                    }
+                "ping" => {
+                    reply = Some(b"+PONG\r\n".to_vec());
                 }
-            },
-            _ => {
-                eprintln!("Unsupported command");
-                let _ = stream.write(b"+OK\r\n")?;
+                _ => {
+                    eprintln!("Unsupported command");
+                }
             }
+        }
+
+        if let Some(b) = reply {
+            stream.write(&b)?;
+        } else {
+            stream.write(b"+OK\r\n")?;
         }
     }
 
