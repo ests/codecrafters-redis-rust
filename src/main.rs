@@ -52,7 +52,18 @@ fn handle_client<T: Write + Read>(mut stream: T) -> std::io::Result<()> {
                         let _ = stream.write(b"+OK\r\n")?;
                     }
                 }
-            }
+            },
+            [Type::String(cmd, StrType::Bulk)] => {
+                match cmd.to_lowercase().as_ref() {
+                    "ping" => {
+                        let _ = stream.write(b"+PONG\r\n")?;
+                    }
+                    _ => {
+                        eprintln!("Unsupported command");
+                        let _ = stream.write(b"+OK\r\n")?;
+                    }
+                }
+            },
             _ => {
                 eprintln!("Unsupported command");
                 let _ = stream.write(b"+OK\r\n")?;
