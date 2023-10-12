@@ -15,6 +15,9 @@ use nom::{
 pub enum Type<'a> {
     Integer(i64),
     String(Cow<'a, str>, StrType),
+
+    // TODO: REST arrays may be nested
+    #[allow(unused)]
     Array(Rc<Vec<Type<'a>>>),
 }
 
