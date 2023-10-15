@@ -4,18 +4,24 @@ use redis_starter_rust::ThreadPool;
 use resp::{StrType, Type};
 use std::{io::Read, io::Write, net::TcpListener};
 
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
     let pool = ThreadPool::new(2);
+
+    let state: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
 
     for stream in listener.incoming() {
         match stream {
             Ok(s) => {
                 println!("accepted new connection");
 
+                let state_clone = Arc::clone(&state);
                 pool.execute(|| {
                     println!("pool.execute");
-                    handle_client(s).unwrap();
+                    handle_client(s, state_clone).unwrap();
                 })
             }
             Err(e) => {
@@ -25,7 +31,10 @@ fn main() {
     }
 }
 
-fn handle_client<T: Write + Read>(mut stream: T) -> std::io::Result<()> {
+fn handle_client<T: Write + Read>(
+    mut stream: T,
+    state: Arc<Mutex<HashMap<String, String>>>,
+) -> std::io::Result<()> {
     loop {
         let mut buf: [u8; 64] = [0; 64];
         let bytes_read = stream.read(&mut buf)?;
@@ -40,6 +49,28 @@ fn handle_client<T: Write + Read>(mut stream: T) -> std::io::Result<()> {
 
         if let Type::String(cmd, StrType::Bulk) = &resp_cmd[0] {
             match cmd.clone().to_owned().to_lowercase().as_ref() {
+                "get" => {
+                    if resp_cmd.len() == 2 {
+                        if let Type::String(key, StrType::Bulk) = &resp_cmd[1] {
+                            let state = state.lock().unwrap();
+                            let val = state.get(key.as_ref());
+                            if let Some(val) = val {
+                                reply = Some(format!("${}\r\n{}\r\n", val.len(), val).into_bytes());
+                            }
+                        }
+                    }
+                }
+                "set" => {
+                    if resp_cmd.len() == 3 {
+                        if let [Type::String(key, StrType::Bulk), Type::String(val, StrType::Bulk)] =
+                            &resp_cmd[1..3]
+                        {
+                            let mut s = state.lock().unwrap();
+                            s.insert(key.clone().into_owned(), val.clone().into_owned());
+                            reply = Some(b"+OK\r\n".to_vec());
+                        }
+                    }
+                }
                 "echo" => {
                     if let Type::String(attr, StrType::Bulk) = &resp_cmd[1] {
                         reply = Some(format!("+{}\r\n", attr.clone().as_ref()).into_bytes());
@@ -57,7 +88,8 @@ fn handle_client<T: Write + Read>(mut stream: T) -> std::io::Result<()> {
         if let Some(b) = reply {
             stream.write(&b)?;
         } else {
-            stream.write(b"+OK\r\n")?;
+            // Null reply
+            stream.write(b"_\r\n")?;
         }
     }
 
