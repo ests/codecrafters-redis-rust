@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 mod resp;
 
 use redis_starter_rust::ThreadPool;
