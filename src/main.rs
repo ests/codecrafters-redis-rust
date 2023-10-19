@@ -62,7 +62,7 @@ fn handle_client<T: Write + Read>(mut stream: T, state: State) -> std::io::Resul
                                     if dur.unwrap().checked_duration_since(time::Instant::now()).is_none() {
                                         // remove
                                         let _ = state.remove(key.as_ref());
-                                        reply = Some(b"-1\r\n".to_vec());
+                                        reply = Some(b"$-1\r\n".to_vec());
                                     }
                                 } 
                             }
