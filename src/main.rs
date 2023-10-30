@@ -1,6 +1,5 @@
-#![allow(unused)]
-
 mod resp;
+mod command;
 
 use redis_starter_rust::ThreadPool;
 use resp::{StrType, Type};

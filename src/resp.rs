@@ -4,7 +4,7 @@ use std::rc::Rc;
 use nom::{
     branch::alt,
     bytes::complete::take,
-    character::complete::{alpha1, char, digit1, line_ending, one_of, u32},
+    character::complete::{char, digit1, line_ending, not_line_ending, one_of, u32},
     combinator::{map, map_res, opt, recognize},
     multi::count,
     sequence::{delimited, terminated, tuple},
@@ -61,12 +61,12 @@ pub fn parse_array(input: &str) -> IResult<&str, Vec<Type>> {
 
 #[allow(unused)]
 pub fn parse_error(input: &str) -> IResult<&str, &str> {
-    delimited(char('-'), alpha1, line_ending)(input)
+    delimited(char('-'), not_line_ending, line_ending)(input)
 }
 
 #[allow(unused)]
 pub fn parse_string(input: &str) -> IResult<&str, &str> {
-    delimited(char('+'), alpha1, line_ending)(input)
+    delimited(char('+'), not_line_ending, line_ending)(input)
 }
 
 #[allow(unused)]

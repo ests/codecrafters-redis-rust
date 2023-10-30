@@ -1,15 +1,19 @@
+mod resp;
+
 use std::{
     sync::{mpsc, Arc, Mutex},
     thread,
 };
 
 pub struct ThreadPool {
+    #[allow(unused)]
     workers: Vec<Worker>,
     sender: mpsc::Sender<Job>,
 }
 
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
+#[allow(unused)]
 struct Worker {
     id: usize,
     thread: thread::JoinHandle<()>,
