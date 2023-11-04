@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use crate::resp::Type as RespType;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-enum Command {
+pub enum Command {
     Ping,
     Echo(String),
     Set(String, String, Option<i64>),
