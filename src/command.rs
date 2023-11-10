@@ -6,7 +6,7 @@ use crate::resp::Type as RespType;
 pub enum Command {
     Ping,
     Echo(String),
-    Set(String, String, Option<i64>),
+    Set(String, String, Option<u64>),
     Get(String),
 }
 
@@ -56,7 +56,7 @@ impl<'a> TryFrom<Vec<RespType<'a>>> for Command {
                             Some(RespType::String(Cow::Borrowed("px"), _)),
                             Some(RespType::String(i, _)),
                         ) => {
-                            let px = i64::from_str_radix(i.as_ref(), 10).unwrap_or(0);
+                            let px = u64::from_str_radix(i.as_ref(), 10).unwrap_or(0);
                             return Ok(Command::Set(key.to_string(), val.to_string(), Some(px)));
                         }
                         _ => return Err("Invalid set command format"),
@@ -117,7 +117,7 @@ mod tests {
             Command::Set(
                 "test_string".to_string(),
                 "test_value".to_string(),
-                Some(142i64)
+                Some(142u64)
             )
         );
     }
