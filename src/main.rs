@@ -1,7 +1,9 @@
 mod command;
+mod reply;
 mod resp;
 
 use redis_starter_rust::ThreadPool;
+use reply::Reply;
 use std::time;
 use std::{io::Read, io::Write, net::TcpListener};
 
@@ -43,14 +45,14 @@ fn handle_client<T: Write + Read>(mut stream: T, state: State) -> std::io::Resul
             break;
         }
 
-        let mut reply: Option<Vec<u8>> = None;
+        let mut reply: Option<Reply> = None;
 
         let (_, resp_cmd): (&str, Vec<resp::Type>) =
             resp::parse_resp(std::str::from_utf8(&buf).unwrap()).unwrap();
         let command = Command::try_from(resp_cmd);
         if command.is_err() {
-            let emsg = command.unwrap_err();
-            reply = Some(format!("-ERR {}\r\n", emsg).as_bytes().to_vec());
+            let emsg: &str = command.unwrap_err();
+            reply = Some(Reply::Error(emsg));
         } else {
             match command.unwrap() {
                 Command::Set(key, val, px) => {
@@ -61,7 +63,7 @@ fn handle_client<T: Write + Read>(mut stream: T, state: State) -> std::io::Resul
                     };
                     let mut s = state.lock().unwrap();
                     s.insert(key, (val, duration));
-                    reply = Some(b"+OK\r\n".to_vec());
+                    reply = Some(Reply::Simple("OK".to_string()));
                 }
                 Command::Get(key) => {
                     let mut state = state.lock().unwrap();
@@ -73,24 +75,23 @@ fn handle_client<T: Write + Read>(mut stream: T, state: State) -> std::io::Resul
                                 .is_none()
                         {
                             let _ = state.remove(&key);
-                            reply = Some(b"$-1\r\n".to_vec());
+                            reply = Some(Reply::NullBulk);
                         } else {
-                            reply = Some(format!("${}\r\n{}\r\n", val.len(), val).into_bytes());
+                            reply = Some(Reply::Bulk(val.to_owned()));
                         }
                     }
                 }
-                Command::Ping => reply = Some(b"+PONG\r\n".to_vec()),
+                Command::Ping => reply = Some(Reply::Pong),
                 Command::Echo(s) => {
-                    reply = Some(format!("+{}\r\n", s).into_bytes());
+                    reply = Some(Reply::Echo(s));
                 }
             }
         }
 
         if let Some(b) = reply {
-            stream.write(&b)?;
+            stream.write(&b.into_bytes())?;
         } else {
-            // Null reply
-            stream.write(b"_\r\n")?;
+            stream.write(&Reply::Null.into_bytes())?;
         }
     }
 
