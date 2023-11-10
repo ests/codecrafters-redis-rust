@@ -19,6 +19,32 @@ fn main() {
 
     let state: State = Arc::new(Mutex::new(HashMap::new()));
 
+    let args: Vec<String> = std::env::args().collect();
+    let mut args_iter = args.iter().skip(1);
+    while let Some(arg) = args_iter.next() {
+        match arg.as_str() {
+            "--dir" => {
+                state.lock().unwrap().insert(
+                    format!("__config:{}", "dir"),
+                    (
+                        args_iter.next().cloned().unwrap_or(String::from("/tmp")),
+                        None,
+                    ),
+                );
+            }
+            "--dbfilename" => {
+                state.lock().unwrap().insert(
+                    format!("__config:{}", "dbfilename"),
+                    (
+                        args_iter.next().cloned().unwrap_or(String::from("dump.db")),
+                        None,
+                    ),
+                );
+            }
+            _ => {}
+        }
+    }
+
     for stream in listener.incoming() {
         match stream {
             Ok(s) => {
@@ -55,6 +81,13 @@ fn handle_client<T: Write + Read>(mut stream: T, state: State) -> std::io::Resul
             reply = Some(Reply::Error(emsg));
         } else {
             match command.unwrap() {
+                Command::ConfigGet(key) => {
+                    let state = state.lock().unwrap();
+                    let config_key = format!("__config:{}", key);
+                    if let Some((val, _)) = state.get(&config_key) {
+                        reply = Some(Reply::Array(vec![key, val.to_owned()]));
+                    }
+                }
                 Command::Set(key, val, px) => {
                     let duration = if let Some(dur) = px {
                         Some(time::Instant::now() + time::Duration::from_millis(dur))

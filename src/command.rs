@@ -8,6 +8,7 @@ pub enum Command {
     Echo(String),
     Set(String, String, Option<u64>),
     Get(String),
+    ConfigGet(String),
 }
 
 impl<'a> TryFrom<Vec<RespType<'a>>> for Command {
@@ -20,6 +21,18 @@ impl<'a> TryFrom<Vec<RespType<'a>>> for Command {
 
         if let Some(RespType::String(a, _)) = cmd {
             match a.as_ref() {
+                "config" => {
+                    let params = (iter.next(), iter.next());
+                    match params {
+                        (
+                            Some(RespType::String(Cow::Borrowed("get"), _)),
+                            Some(RespType::String(key, _)),
+                        ) => {
+                            return Ok(Command::ConfigGet(key.to_string()));
+                        }
+                        _ => return Err("Invalid config command"),
+                    }
+                }
                 "ping" => return Ok(Command::Ping),
                 "echo" => {
                     let params = iter.next();
