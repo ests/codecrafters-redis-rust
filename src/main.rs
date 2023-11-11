@@ -8,17 +8,19 @@ use std::time;
 use std::{io::Read, io::Write, net::TcpListener};
 
 use command::Command;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 
-type State = Arc<Mutex<HashMap<String, String>>>;
+type Duration = Arc<Mutex<HashMap<String, time::Instant>>>;
+type State = Arc<Mutex<BTreeMap<String, String>>>;
 type Config = Arc<HashMap<String, String>>;
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
     let pool = ThreadPool::new(2);
 
-    let state: State = Arc::new(Mutex::new(HashMap::new()));
+    let state: State = Arc::new(Mutex::new(BTreeMap::new()));
+    let durations: Duration = Arc::new(Mutex::new(HashMap::new()));
 
     let args: Vec<String> = std::env::args().collect();
     let mut arg_pairs = HashMap::new();
@@ -41,8 +43,10 @@ fn main() {
             Ok(s) => {
                 let state_clone = Arc::clone(&state);
                 let config = Arc::clone(&shared_args);
+                let durations = Arc::clone(&durations);
+
                 pool.execute(|| {
-                    handle_client(s, state_clone, config).unwrap();
+                    handle_client(s, state_clone, config, durations).unwrap();
                 })
             }
             Err(e) => {
@@ -52,7 +56,12 @@ fn main() {
     }
 }
 
-fn handle_client<T: Write + Read>(mut stream: T, state: State, config: Config) -> std::io::Result<()> {
+fn handle_client<T: Write + Read>(
+    mut stream: T,
+    state: State,
+    config: Config,
+    durations: Duration,
+) -> std::io::Result<()> {
     loop {
         let mut buf: [u8; 64] = [0; 64];
         let bytes_read = stream.read(&mut buf)?;
@@ -70,6 +79,9 @@ fn handle_client<T: Write + Read>(mut stream: T, state: State, config: Config) -
             let emsg: &str = command.unwrap_err();
             reply = Some(Reply::Error(emsg));
         } else {
+            let mut state = state.lock().unwrap();
+            let mut durations = durations.lock().unwrap();
+
             match command.unwrap() {
                 Command::ConfigGet(key) => {
                     if let Some(val) = config.get(&key) {
@@ -77,30 +89,26 @@ fn handle_client<T: Write + Read>(mut stream: T, state: State, config: Config) -
                     }
                 }
                 Command::Set(key, val, px) => {
-                    let duration = if let Some(dur) = px {
-                        Some(time::Instant::now() + time::Duration::from_millis(dur))
-                    } else {
-                        None
-                    };
-                    let mut s = state.lock().unwrap();
-                    s.insert(key, val);
-                    // TODO: handle duration
+                    if px.is_some() {
+                        durations.insert(
+                            key.clone(),
+                            time::Instant::now() + time::Duration::from_millis(px.unwrap()),
+                        );
+                    }
+                    state.insert(key, val);
                     reply = Some(Reply::Simple("OK".to_string()));
                 }
                 Command::Get(key) => {
-                    let mut state = state.lock().unwrap();
                     if let Some(val) = state.get(&key) {
-                        // if dur.is_some()
-                        //     && dur
-                        //         .unwrap()
-                        //         .checked_duration_since(time::Instant::now())
-                        //         .is_none()
-                        // {
-                        //     let _ = state.remove(&key);
-                        //     reply = Some(Reply::NullBulk);
-                        // } else {
-                        reply = Some(Reply::Bulk(val.to_owned()));
-                        // }
+                        if durations.get(&key).is_some_and(|ins| {
+                            ins.checked_duration_since(time::Instant::now()).is_none()
+                        }) {
+                            let _ = durations.remove(&key);
+                            let _ = state.remove(&key);
+                            reply = Some(Reply::NullBulk);
+                        } else {
+                            reply = Some(Reply::Bulk(val.to_owned()));
+                        }
                     }
                 }
                 Command::Ping => reply = Some(Reply::Pong),
