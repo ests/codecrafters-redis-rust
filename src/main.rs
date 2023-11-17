@@ -1,9 +1,11 @@
 mod command;
 mod reply;
 mod resp;
+mod rdb;
 
 use redis_starter_rust::ThreadPool;
 use reply::Reply;
+use std::path::PathBuf;
 use std::time;
 use std::{io::Read, io::Write, net::TcpListener};
 
@@ -11,8 +13,8 @@ use command::Command;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 
-type Duration = Arc<Mutex<HashMap<String, time::Instant>>>;
-type State = Arc<Mutex<BTreeMap<String, String>>>;
+pub type Duration = Arc<Mutex<HashMap<String, time::Instant>>>;
+pub type State = Arc<Mutex<BTreeMap<String, String>>>;
 type Config = Arc<HashMap<String, String>>;
 
 fn main() {
@@ -36,6 +38,15 @@ fn main() {
             _ => {}
         }
     }
+
+    if arg_pairs.contains_key("dir") && arg_pairs.contains_key("dbname") {
+        // try to load state from rdb
+        let mut path = PathBuf::new();
+        path.push(arg_pairs.get("dir").unwrap());
+        path.push(arg_pairs.get("dbfilename").unwrap());
+        // rdb::load_from_rdb(&mut state, &mut durations, )
+    }
+
     let shared_args: Config = Arc::new(arg_pairs);
 
     for stream in listener.incoming() {
