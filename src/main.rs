@@ -39,12 +39,11 @@ fn main() {
         }
     }
 
-    if arg_pairs.contains_key("dir") && arg_pairs.contains_key("dbname") {
-        // try to load state from rdb
+    if arg_pairs.contains_key("dir") && arg_pairs.contains_key("dbfilename") {
         let mut path = PathBuf::new();
         path.push(arg_pairs.get("dir").unwrap());
         path.push(arg_pairs.get("dbfilename").unwrap());
-        // rdb::load_from_rdb(&mut state, &mut durations, )
+        rdb::load_from_rdb(path.as_path(), Arc::clone(&state), Arc::clone(&durations)).unwrap();
     }
 
     let shared_args: Config = Arc::new(arg_pairs);
