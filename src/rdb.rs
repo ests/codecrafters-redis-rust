@@ -12,12 +12,62 @@ pub fn load_from_rdb(path: &Path, state: State, durations: Duration) -> Result<(
     file.read_to_end(&mut buf)?;
     let cursor = Cursor::new(buf);
 
-    let (_, (_, version)) = parse_rdb_header(&cursor.get_ref()[0..9]).unwrap();
-    let (rest, (hash_size, expiry_size)) = parse_resize_db(&cursor.get_ref()[9..]).unwrap();
+    let (_, (_, _version)) = parse_rdb_header(&cursor.get_ref()[0..9]).unwrap();
+    let (rest, (hash_size, _expiry_size)) = parse_resize_db(&cursor.get_ref()[9..]).unwrap();
 
-    dbg!(&hash_size);
-    dbg!(&expiry_size);
+    for _ in 0..hash_size {
+        let (rest, (key, value)) = parse_key_value_pair(rest).unwrap();
+        dbg!(&key);
+        dbg!(&value);
+        // insert into state
+    }
+
     Ok(())
+}
+
+fn parse_key_value_pair(input: &[u8]) -> IResult<&[u8], (&str, &str)> {
+    let (rest, value_type) = be_u8(input)?;
+    if value_type == 0x00 {
+        let (rest, first_byte) = be_u8(rest)?;
+        let (rest, key) = match first_byte >> 6 {
+            00 => {
+                let length = (first_byte & 0b00111111) as usize;
+                let (rest, string) = take(length)(rest)?;
+                (rest, std::str::from_utf8(string).unwrap_or("NULL"))
+            }
+            // 01 => {
+            //     let (input, second_byte) = be_u8(input)?;
+            //     Ok((
+            //         input,
+            //         (((first_byte & 0b00111111) as usize) << 8) | second_byte as usize,
+            //     ))
+            // }
+            _ => {
+                todo!("unimplemented")
+            }
+        };
+        let (rest, second_byte) = be_u8(rest)?;
+        let (rest, value) = match second_byte >> 6 {
+            00 => {
+                let length = (second_byte & 0b00111111) as usize;
+                let (rest, string) = take(length)(rest)?;
+                (rest, std::str::from_utf8(string).unwrap_or("NULL"))
+            }
+            // 01 => {
+            //     let (input, second_byte) = be_u8(input)?;
+            //     Ok((
+            //         input,
+            //         (((first_byte & 0b00111111) as usize) << 8) | second_byte as usize,
+            //     ))
+            // }
+            _ => {
+                todo!("unimplemented")
+            }
+        };
+        Ok((rest, (key, value)))
+    } else {
+        todo!("not implemented");
+    }
 }
 
 fn parse_rdb_header(input: &[u8]) -> IResult<&[u8], (&str, u32)> {
