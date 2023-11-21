@@ -27,47 +27,36 @@ pub fn load_from_rdb(path: &Path, state: State, durations: Duration) -> Result<(
 
 fn parse_key_value_pair(input: &[u8]) -> IResult<&[u8], (&str, &str)> {
     let (rest, value_type) = be_u8(input)?;
-    if value_type == 0x00 {
-        let (rest, first_byte) = be_u8(rest)?;
-        let (rest, key) = match first_byte >> 6 {
-            00 => {
-                let length = (first_byte & 0b00111111) as usize;
-                let (rest, string) = take(length)(rest)?;
-                (rest, std::str::from_utf8(string).unwrap_or("NULL"))
-            }
-            // 01 => {
-            //     let (input, second_byte) = be_u8(input)?;
-            //     Ok((
-            //         input,
-            //         (((first_byte & 0b00111111) as usize) << 8) | second_byte as usize,
-            //     ))
-            // }
-            _ => {
-                todo!("unimplemented")
-            }
-        };
-        let (rest, second_byte) = be_u8(rest)?;
-        let (rest, value) = match second_byte >> 6 {
-            00 => {
-                let length = (second_byte & 0b00111111) as usize;
-                let (rest, string) = take(length)(rest)?;
-                (rest, std::str::from_utf8(string).unwrap_or("NULL"))
-            }
-            // 01 => {
-            //     let (input, second_byte) = be_u8(input)?;
-            //     Ok((
-            //         input,
-            //         (((first_byte & 0b00111111) as usize) << 8) | second_byte as usize,
-            //     ))
-            // }
-            _ => {
-                todo!("unimplemented")
-            }
-        };
-        Ok((rest, (key, value)))
-    } else {
-        todo!("not implemented");
+    match value_type {
+        0x00 => {
+            let (rest, length) = parse_length(rest)?;
+            let (rest, string) = take(length)(rest)?;
+            let (rest, key) = (rest, std::str::from_utf8(string).unwrap_or("NULL"));
+            let (rest, length) = parse_length(rest)?;
+            let (rest, string) = take(length)(rest)?;
+            let (rest, value) = (rest, std::str::from_utf8(string).unwrap_or("NULL"));
+            Ok((rest, (key, value)))
+        }
+        _ => todo!("not implemented"),
     }
+}
+
+fn parse_length(input: &[u8]) -> IResult<&[u8], usize> {
+    let (rest, first_byte) = be_u8(input)?;
+    let (rest, length) = match first_byte >> 6 {
+        00 => (rest, (first_byte & 0b00111111) as usize),
+        01 => {
+            let (rest, second_byte) = be_u8(rest)?;
+            (
+                rest,
+                (((first_byte & 0b00111111) as usize) << 8) | second_byte as usize,
+            )
+        }
+        _ => {
+            todo!("unimplemented")
+        }
+    };
+    Ok((rest, length))
 }
 
 fn parse_rdb_header(input: &[u8]) -> IResult<&[u8], (&str, u32)> {
@@ -81,22 +70,7 @@ fn parse_rdb_header(input: &[u8]) -> IResult<&[u8], (&str, u32)> {
 fn parse_resize_db(input: &[u8]) -> IResult<&[u8], (usize, usize)> {
     let (input, _) = take_while(|b| b != 0xFB)(input)?;
     let (input, _) = be_u8(input)?; // Consume the FB byte
-    let (input, hash_size) = parse_length_encoded_integer(input)?;
-    let (input, expire_size) = parse_length_encoded_integer(input)?;
+    let (input, hash_size) = parse_length(input)?;
+    let (input, expire_size) = parse_length(input)?;
     Ok((input, (hash_size, expire_size)))
-}
-
-fn parse_length_encoded_integer(input: &[u8]) -> IResult<&[u8], usize> {
-    let (input, first_byte) = be_u8(input)?;
-    match first_byte >> 6 {
-        00 => Ok((input, (first_byte & 0b00111111) as usize)),
-        01 => {
-            let (input, second_byte) = be_u8(input)?;
-            Ok((
-                input,
-                (((first_byte & 0b00111111) as usize) << 8) | second_byte as usize,
-            ))
-        }
-        _ => todo!("not implemented"),
-    }
 }
