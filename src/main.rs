@@ -1,7 +1,7 @@
 mod command;
+mod rdb;
 mod reply;
 mod resp;
-mod rdb;
 
 use redis_starter_rust::ThreadPool;
 use reply::Reply;
@@ -10,18 +10,18 @@ use std::time;
 use std::{io::Read, io::Write, net::TcpListener};
 
 use command::Command;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 pub type Duration = Arc<Mutex<HashMap<String, time::Instant>>>;
-pub type State = Arc<Mutex<BTreeMap<String, String>>>;
+pub type State = Arc<Mutex<HashMap<String, String>>>;
 type Config = Arc<HashMap<String, String>>;
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
     let pool = ThreadPool::new(2);
 
-    let state: State = Arc::new(Mutex::new(BTreeMap::new()));
+    let state: State = Arc::new(Mutex::new(HashMap::new()));
     let durations: Duration = Arc::new(Mutex::new(HashMap::new()));
 
     let args: Vec<String> = std::env::args().collect();
