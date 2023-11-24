@@ -9,6 +9,7 @@ pub enum Command {
     Set(String, String, Option<u64>),
     Get(String),
     ConfigGet(String),
+    Keys(),
 }
 
 impl<'a> TryFrom<Vec<RespType<'a>>> for Command {
@@ -34,6 +35,10 @@ impl<'a> TryFrom<Vec<RespType<'a>>> for Command {
                     }
                 }
                 "ping" => return Ok(Command::Ping),
+                "keys" => {
+                    let _ = iter.next();
+                    return Ok(Command::Keys());
+                }
                 "echo" => {
                     let params = iter.next();
                     match params {

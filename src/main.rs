@@ -121,6 +121,9 @@ fn handle_client<T: Write + Read>(
                         }
                     }
                 }
+                Command::Keys() => {
+                    reply = Some(Reply::Array(state.keys().cloned().collect()));
+                }
                 Command::Ping => reply = Some(Reply::Pong),
                 Command::Echo(s) => {
                     reply = Some(Reply::Echo(s));
