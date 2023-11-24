@@ -15,11 +15,12 @@ pub fn load_from_rdb(path: &Path, state: State, durations: Duration) -> Result<(
     let (_, (_, _version)) = parse_rdb_header(&cursor.get_ref()[0..9]).unwrap();
     let (rest, (hash_size, _expiry_size)) = parse_resize_db(&cursor.get_ref()[9..]).unwrap();
 
+    let mut state = state.lock().unwrap();
+    let mut rest_of_bytes = rest;
     for _ in 0..hash_size {
-        let (rest, (key, value)) = parse_key_value_pair(rest).unwrap();
-        dbg!(&key);
-        dbg!(&value);
-        // insert into state
+        let (rest, (key, value)) = parse_key_value_pair(rest_of_bytes).unwrap();
+        state.insert(key.to_string(), value.to_string());
+        rest_of_bytes = rest;
     }
 
     Ok(())
