@@ -3,7 +3,8 @@ use std::{error::Error, fs::File, io::Read, path::Path};
 
 use crate::{Duration, State};
 use nom::bytes::complete::{take, take_while};
-use nom::number::complete::be_u8;
+use nom::combinator::peek;
+use nom::number::complete::{be_u16, be_u32, be_u8};
 use nom::{bytes::complete::tag, combinator::map_res, IResult};
 
 pub fn load_from_rdb(path: &Path, state: State, durations: Duration) -> Result<(), Box<dyn Error>> {
@@ -19,34 +20,73 @@ pub fn load_from_rdb(path: &Path, state: State, durations: Duration) -> Result<(
     let mut rest_of_bytes = rest;
     for _ in 0..hash_size {
         let (rest, (key, value)) = parse_key_value_pair(rest_of_bytes).unwrap();
-        state.insert(key.to_string(), value.to_string());
+        state.insert(key.to_string(), value.as_str().to_owned());
         rest_of_bytes = rest;
     }
 
     Ok(())
 }
 
-fn parse_key_value_pair(input: &[u8]) -> IResult<&[u8], (&str, &str)> {
+enum OwnedOrBorrowed<'a> {
+    Owned(String),
+    Borrowed(&'a str),
+}
+
+impl<'a> OwnedOrBorrowed<'a> {
+    fn as_str(&self) -> &str {
+        match self {
+            OwnedOrBorrowed::Owned(s) => s,
+            OwnedOrBorrowed::Borrowed(s) => s,
+        }
+    }
+}
+
+fn parse_key_value_pair(input: &[u8]) -> IResult<&[u8], (&str, OwnedOrBorrowed)> {
     let (rest, value_type) = be_u8(input)?;
     match value_type {
         0x00 => {
             let (rest, length) = parse_length(rest)?;
             let (rest, string) = take(length)(rest)?;
             let (rest, key) = (rest, std::str::from_utf8(string).unwrap_or("NULL"));
-            let (rest, length) = parse_length(rest)?;
-            let (rest, string) = take(length)(rest)?;
-            let (rest, value) = (rest, std::str::from_utf8(string).unwrap_or("NULL"));
+
+            // check if value length byte has special format
+            let (_, next) = peek(be_u8)(rest)?;
+            let next = next >> 6;
+            let (rest, value) = if next == 0b11 {
+                let (rest, next) = be_u8(rest)?;
+                 let (rest, value) = match next & 0b00111111 {
+                    0b00 => {
+                        let (rest, number) = be_u8(rest)?;
+                        (rest, number as usize)
+                    }
+                    0b01 => {
+                        let (rest, number) = be_u16(rest)?;
+                        (rest, number as usize)
+                    }
+                    0b10 => {
+                        let (rest, number) = be_u32(rest)?;
+                        (rest, number as usize)
+                    }
+                    _ => panic!("Unexpected integer type"),
+                };
+                // FIX: parsed integer is converted to &str
+                (rest, OwnedOrBorrowed::Owned(value.to_string()))
+            } else {
+                let (rest, length) = parse_length(rest)?;
+                let (rest, string) = take(length)(rest)?;
+                (rest, OwnedOrBorrowed::Borrowed(std::str::from_utf8(string).unwrap_or("NULL")))
+            };
             Ok((rest, (key, value)))
         }
-        _ => todo!("not implemented"),
+        _ => todo!("not implemented: {:#02x}", &value_type),
     }
 }
 
 fn parse_length(input: &[u8]) -> IResult<&[u8], usize> {
     let (rest, first_byte) = be_u8(input)?;
     let (rest, length) = match first_byte >> 6 {
-        00 => (rest, (first_byte & 0b00111111) as usize),
-        01 => {
+        0b00 => (rest, (first_byte & 0b00111111) as usize),
+        0b01 => {
             let (rest, second_byte) = be_u8(rest)?;
             (
                 rest,
@@ -54,7 +94,7 @@ fn parse_length(input: &[u8]) -> IResult<&[u8], usize> {
             )
         }
         _ => {
-            todo!("unimplemented")
+            todo!("Not implemented {:#08b}", first_byte >> 6);
         }
     };
     Ok((rest, length))
